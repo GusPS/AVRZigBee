@@ -10,7 +10,8 @@
     <uses-feature
         android:name="android.hardware.usb.host"
         android:required="true" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <application
         android:icon="@drawable/ic_launcher"
@@ -25,15 +26,17 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
 
-                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+                <!-- action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" / -->
             </intent-filter>
 
             <meta-data
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
-        <activity android:name="group.pals.android.lib.ui.filechooser.FileChooserActivity" 
-            android:configChanges="orientation|screenSize|keyboard|keyboardHidden"/>
+        <activity
+            android:name="group.pals.android.lib.ui.filechooser.FileChooserActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden" />
+
         <service android:name="group.pals.android.lib.ui.filechooser.services.LocalFileProvider" />
     </application>
 

@@ -3,18 +3,34 @@ package ar.com.gps.android.apps.zbasp;
 public class BLPage
 {
 
-	public int[] data;
+	public char[] data;
+	private int baseAddress;
+	private int pageSize;
+	private int sizeChunk;
+
+	public BLPage(int baseAddress, int pageSize, int sizeChunk)
+	{
+		this.baseAddress = baseAddress;
+		this.pageSize = pageSize;
+		this.sizeChunk = sizeChunk;
+		data = new char[this.pageSize];
+		for (int i = 0; i < data.length; i++)
+			data[i] = 0xFF;
+	}
 
 	public int getBaseAddress()
 	{
-		// TODO Auto-generated method stub
-		return 0;
+		return baseAddress;
 	}
 
 	public int getPageSize()
 	{
-		// TODO Auto-generated method stub
-		return 128;
+		return pageSize;
+	}
+
+	public int getSizeChunk()
+	{
+		return sizeChunk;
 	}
 
 }
