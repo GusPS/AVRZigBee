@@ -23,6 +23,7 @@ public class MainActivity extends Activity
 
 	static final String TAG = MainActivity.class.getSimpleName();
 	private static final int _ReqChooseFile = 0;
+	private static final String ACTION_USB_PERMISSION = "ar.com.gps.android.apps.avrdudroid.USB_PERMISSION";
 
 	@Override
 	public void onCreate(Bundle savedInstanceState)
@@ -106,7 +107,8 @@ public class MainActivity extends Activity
 		{
 			Integer zbAddr = (Integer) params[0];
 			File hexFile = (File) params[1];
-			OTAProgrammer otap = new OTAProgrammer(zbAddr, hexFile, ((ProgressBar) findViewById(R.id.progressBar)));
+			OTAProgrammer otap = new OTAProgrammer(getApplicationContext(), ACTION_USB_PERMISSION, zbAddr, hexFile,
+					((ProgressBar) findViewById(R.id.progressBar)));
 			otap.setPublishProgress(MethodDelegate.createWithArgs(this, "pubProgress"));
 			return otap.program();
 		}

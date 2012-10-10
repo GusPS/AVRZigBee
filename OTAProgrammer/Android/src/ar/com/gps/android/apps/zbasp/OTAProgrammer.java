@@ -9,7 +9,9 @@ import java.util.TreeMap;
 
 import org.xjava.delegates.MethodDelegate;
 
+import android.content.Context;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 public class OTAProgrammer
 {
@@ -19,9 +21,14 @@ public class OTAProgrammer
 	private File hexFile;
 	private Integer zbAddr;
 	private ProgressBar progressBar;
+	private Context context;
+	private String actionUsbPermission;
 
-	public OTAProgrammer(Integer zbAddr, File hexFile, ProgressBar progressBar)
+	public OTAProgrammer(Context context, String actionUsbPermission, Integer zbAddr, File hexFile,
+			ProgressBar progressBar)
 	{
+		this.context = context;
+		this.actionUsbPermission = actionUsbPermission;
 		this.zbAddr = zbAddr;
 		this.hexFile = hexFile;
 		this.progressBar = progressBar;
@@ -29,9 +36,18 @@ public class OTAProgrammer
 
 	public Integer program()
 	{
-		ZBCoordinator zbc = new ZBCoordinator();
-		if (zbc.isHearbeatOk())
+		ZBCoordinator zbc = new ZBCoordinator(this.context, this.actionUsbPermission);
+		if (!zbc.isHearbeatOk())
+		{
+			zbc.close();
 			return Integer.valueOf(-4);
+		}
+
+		if (true)
+		{
+			zbc.close();
+			return Integer.valueOf(0);
+		}
 		// TODO Verificar si el nodo está en BL, sino switchear a BL
 		ZBResult rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
 		if (rdo.getStatus() == ZBResultStatus.TRANSFER_ERROR)
@@ -41,7 +57,7 @@ public class OTAProgrammer
 		if (rdo.data[0] == 0x00)
 		{
 			send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-SBL").getBytes(), 3);
-			// ToDo Toast
+			// TODO Toast
 			// ("Waiting 3 seconds for Node to go into bootloader\n");
 			bootloaderDelay();
 			rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
@@ -167,6 +183,8 @@ public class OTAProgrammer
 		{
 			return Integer.valueOf(-3);
 		}
+
+		zbc.close();
 
 		return Integer.valueOf(0);
 	}
