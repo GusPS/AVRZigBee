@@ -33,18 +33,30 @@ public class OTAProgrammer
 		if (zbc.isHearbeatOk())
 			return Integer.valueOf(-4);
 		// TODO Verificar si el nodo está en BL, sino switchear a BL
-		ZBResult rdo = send(("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
+		ZBResult rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
 		if (rdo.getStatus() == ZBResultStatus.TRANSFER_ERROR)
 			return Integer.valueOf(-5);
 
+		// Check if Bootloader
 		if (rdo.data[0] == 0x00)
 		{
-			
+			send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-SBL").getBytes(), 3);
+			// ToDo Toast
+			// ("Waiting 3 seconds for Node to go into bootloader\n");
+			bootloaderDelay();
+			rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
+			if (rdo.getLength() != 1 || rdo.data[0] == 0x00)
+			{
+				return Integer.valueOf(-7);
+			} else if (rdo.data[0] != 0x01)
+			{
+				return Integer.valueOf(-8);
+			}
 		} else if (rdo.data[0] != 0x01)
 		{
 			return Integer.valueOf(-6);
 		}
-		
+
 		int pageSize = 128; // TODO
 		int minAddress = 0xFFFF;
 		int maxAddress = 0x0000;
@@ -121,7 +133,7 @@ public class OTAProgrammer
 						buffer[i + cmd.length()] = (byte) blPage.data[i + j];
 					page_offset += this_chunk;
 
-					rdo = send(buffer, 0);
+					rdo = send(zbc, buffer, 0);
 
 					if (rdo.getStatus() == ZBResultStatus.TRANSFER_ERROR)
 					{
@@ -144,19 +156,31 @@ public class OTAProgrammer
 
 		// CRC Check
 		int crc16 = getCrc16();
-		rdo = send(
-				("SC-" + String.format("%02X", zbAddr) + "-CRC-" + String.format("%04X", minAddress) + "-" + String.format(
-						"%04X", maxAddress)).getBytes(), 3);
+		rdo = send(zbc,
+				("SC-" + String.format("%02X", zbAddr) + "-CRC-" + String.format("%04X", minAddress) + "-" + String
+						.format("%04X", maxAddress)).getBytes(), 3);
 		boolean crc_ok = rdo.getLength() == 2 && crc16 == ((rdo.data[0] << 8) | rdo.data[1]);
 		if (crc_ok)
 		{
-			rdo = send(("SC-" + String.format("%02X", zbAddr) + "-QBL").getBytes(), 3);
+			rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-QBL").getBytes(), 3);
 		} else
 		{
 			return Integer.valueOf(-3);
 		}
 
 		return Integer.valueOf(0);
+	}
+
+	private void bootloaderDelay()
+	{
+		try
+		{
+			Thread.sleep(3000);
+		} catch (InterruptedException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	private int getCrc16()
@@ -177,69 +201,50 @@ public class OTAProgrammer
 		return crc;
 	}
 
-	private ZBResult send(byte[] buffer, int retries)
+	private ZBResult send(ZBCoordinator zbc, byte[] buffer, int retries)
 	{
 		ZBResult rdo = new ZBResult();
 
-		while (retries >= 0)
+		while (true)
 		{
-			int realNumBytes = usb_control_msg(programmer, // handle obtained
-															// with usb_open()
-					USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT, // bRequestType
-					132, // bRequest
-					0, // wValue
-					0, // wIndex
-					command, // pointer to destination buffer
-					size, // wLength
-					1000 // timeoutInMilliseconds
-			);
-
+			zbc.send(buffer);
 			// Read header response
-			int numBytes = readEP1(3000);
+			ZBResult rta = zbc.readEP1(3000);
 
-			if (numBytes == 2)
+			try
 			{
-				int length = buffer[0];
-				int rtype = buffer[1];
-
-				if (rtype == 1)
+				if (rta.getLength() == 2)
 				{
-					numBytes = readEP1(500);
-					if (numBytes == length - 1)
-						return numBytes;
-					else
-						throw new ZBException("Inconsistence Response");
-				} else
-					throw new ZBException("ZB Timeout! - " + rtype);
-			} else
-				throw new ZBException("USB Timeout - " + numBytes);
+					int length = rta.data[0];
+					int rtype = rta.data[1];
 
-			while (readEP1(500) >= 0)
-				;
-			retries--;
+					if (rtype == 1)
+					{
+						rta = zbc.readEP1(500);
+						if (rta.getLength() == length - 1)
+						{
+							rdo.setLength(rta.getLength());
+							rdo.setStatus(ZBResultStatus.TRANSFER_OK);
+							return rdo;
+						} else
+							throw new ZBException("Inconsistence Response");
+					} else
+						throw new ZBException("ZB Timeout! - " + rtype);
+				} else
+					throw new ZBException("USB Timeout - " + rta.getLength());
+			} catch (ZBException zbe)
+			{
+				while (zbc.readEP1(500).getLength() >= 0)
+					;
+				retries--;
+				if (retries <= 0)
+					break;
+			}
+
 		}
 
 		rdo.setStatus(ZBResultStatus.TRANSFER_ERROR);
 		return rdo;
-	}
-
-	private int readEP1(int msTimeOut)
-	{
-		int numBytes = usb_interrupt_read(programmer, // handle obtained with
-														// usb_open()
-				USB_ENDPOINT_IN | 1,// identifies endpoint 1
-				buffer, // data buffer
-				sizeof(buffer), // maximum amount to read
-				msTimeOut);
-
-		/*
-		 * printf("%i:", numBytes);
-		 * 
-		 * int i; for (i = 0; i < numBytes; i++) { printf("%02X", buffer[i]); if
-		 * (i != numBytes - 1) printf("-"); } printf("\n");
-		 */
-
-		return numBytes;
 	}
 
 	Map<Integer, BLPage> BLPages = new TreeMap<Integer, BLPage>();
