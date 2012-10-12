@@ -1,5 +1,6 @@
 package ar.com.gps.android.apps.zbasp;
 
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Iterator;
 
@@ -9,11 +10,16 @@ import android.content.Intent;
 import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbEndpoint;
+import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.hardware.usb.UsbRequest;
+import android.util.Log;
 
 public class ZBCoordinator
 {
 	private UsbDeviceConnection usbDeviceConnection = null;
+	private UsbEndpoint endpointInt = null;
 
 	public ZBCoordinator(Context context, String actionUsbPermission)
 	{
@@ -39,8 +45,10 @@ public class ZBCoordinator
 
 		if (device != null)
 		{
-			device.getInterface(0);
+			UsbInterface intf = device.getInterface(0);
+			this.endpointInt = intf.getEndpoint(0);
 			this.usbDeviceConnection = manager.openDevice(device);
+			this.usbDeviceConnection.claimInterface(intf, false);
 		}
 	}
 
@@ -59,37 +67,45 @@ public class ZBCoordinator
 
 	public ZBResult send(byte[] buffer)
 	{
-		// TODO Auto-generated method stub
+		if (usbDeviceConnection == null)
+			return null;
 
-		/*
-		 * int realNumBytes = usb_control_msg(programmer, // handle obtained //
-		 * with usb_open() USB_TYPE_VENDOR | USB_RECIP_DEVICE |
-		 * USB_ENDPOINT_OUT, // bRequestType 132, // bRequest 0, // wValue 0, //
-		 * wIndex command, // pointer to destination buffer size, // wLength
-		 * 1000 // timeoutInMilliseconds );
-		 */
+		// USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT
+		int realNumBytes = usbDeviceConnection.controlTransfer(UsbConstants.USB_TYPE_VENDOR
+				| UsbConstants.USB_ENDPOINT_XFER_CONTROL | UsbConstants.USB_DIR_OUT, 132, 0, 0, buffer, buffer.length,
+				1000);
 
-		return new ZBResult();
+		ZBResult rdo = new ZBResult();
+		rdo.setLength(realNumBytes);
+		rdo.data = new byte[realNumBytes];
+		for (int i = 0; i < realNumBytes; i++)
+			rdo.data[i] = buffer[i];
+		if (realNumBytes < 0)
+			rdo.setStatus(ZBResultStatus.TRANSFER_ERROR);
+		else
+			rdo.setStatus(ZBResultStatus.TRANSFER_OK);
+		return rdo;
 	}
 
-	public ZBResult readEP1(int msTimeOut)
+	public ZBResult readEP1(int numBytes)
 	{
-		// TODO Auto-generated method stub
-		/*
-		 * int numBytes = usb_interrupt_read(programmer, // handle obtained with
-		 * // usb_open() USB_ENDPOINT_IN | 1,// identifies endpoint 1 buffer, //
-		 * data buffer sizeof(buffer), // maximum amount to read msTimeOut);
-		 */
+		if (usbDeviceConnection == null)
+			return null;
 
-		/*
-		 * printf("%i:", numBytes);
-		 * 
-		 * int i; for (i = 0; i < numBytes; i++) { printf("%02X", buffer[i]); if
-		 * (i != numBytes - 1) printf("-"); } printf("\n");
-		 */
+		ZBResult rdo = new ZBResult();
+		rdo.setStatus(ZBResultStatus.TRANSFER_OK);
 
-		return new ZBResult();
+		UsbRequest request = new UsbRequest();
+		request.initialize(usbDeviceConnection, endpointInt);
+		ByteBuffer buffer = ByteBuffer.allocate(numBytes);
+		request.queue(buffer, numBytes);
+		usbDeviceConnection.requestWait();
+		rdo.setLength(numBytes);
+		rdo.data = buffer.array();
+		for (int i = 0; i < numBytes; i++)
+			Log.d("USB" + i, rdo.data[i] + "");
 
+		return rdo;
 	}
 
 	public void close()

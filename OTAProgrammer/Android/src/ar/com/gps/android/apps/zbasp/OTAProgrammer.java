@@ -11,7 +11,6 @@ import org.xjava.delegates.MethodDelegate;
 
 import android.content.Context;
 import android.widget.ProgressBar;
-import android.widget.Toast;
 
 public class OTAProgrammer
 {
@@ -42,16 +41,20 @@ public class OTAProgrammer
 			zbc.close();
 			return Integer.valueOf(-4);
 		}
+		
+		// TODO Verificar si el nodo está en BL, sino switchear a BL
+		ZBResult rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
+		if (rdo.getStatus() == ZBResultStatus.TRANSFER_ERROR)
+		{
+			zbc.close();
+			return Integer.valueOf(-5);
+		}
 
 		if (true)
 		{
 			zbc.close();
 			return Integer.valueOf(0);
 		}
-		// TODO Verificar si el nodo está en BL, sino switchear a BL
-		ZBResult rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
-		if (rdo.getStatus() == ZBResultStatus.TRANSFER_ERROR)
-			return Integer.valueOf(-5);
 
 		// Check if Bootloader
 		if (rdo.data[0] == 0x00)
@@ -227,38 +230,23 @@ public class OTAProgrammer
 		{
 			zbc.send(buffer);
 			// Read header response
-			ZBResult rta = zbc.readEP1(3000);
+			ZBResult rta = zbc.readEP1(2);
 
 			try
 			{
-				if (rta.getLength() == 2)
-				{
-					int length = rta.data[0];
-					int rtype = rta.data[1];
+				int length = rta.data[0];
+				int rtype = rta.data[1];
 
-					if (rtype == 1)
-					{
-						rta = zbc.readEP1(500);
-						if (rta.getLength() == length - 1)
-						{
-							rdo.setLength(rta.getLength());
-							rdo.setStatus(ZBResultStatus.TRANSFER_OK);
-							return rdo;
-						} else
-							throw new ZBException("Inconsistence Response");
-					} else
-						throw new ZBException("ZB Timeout! - " + rtype);
-				} else
-					throw new ZBException("USB Timeout - " + rta.getLength());
+				if (rtype == 1)
+					return zbc.readEP1(length - 1);
+				else
+					throw new ZBException("ZB Timeout! - " + rtype);
 			} catch (ZBException zbe)
 			{
-				while (zbc.readEP1(500).getLength() >= 0)
-					;
 				retries--;
 				if (retries <= 0)
 					break;
 			}
-
 		}
 
 		rdo.setStatus(ZBResultStatus.TRANSFER_ERROR);
