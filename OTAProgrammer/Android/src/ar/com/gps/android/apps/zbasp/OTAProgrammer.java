@@ -10,6 +10,7 @@ import java.util.TreeMap;
 import org.xjava.delegates.MethodDelegate;
 
 import android.content.Context;
+import android.util.Log;
 import android.widget.ProgressBar;
 
 public class OTAProgrammer
@@ -41,19 +42,13 @@ public class OTAProgrammer
 			zbc.close();
 			return Integer.valueOf(-4);
 		}
-		
+
 		// TODO Verificar si el nodo está en BL, sino switchear a BL
 		ZBResult rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
 		if (rdo.getStatus() == ZBResultStatus.TRANSFER_ERROR)
 		{
 			zbc.close();
 			return Integer.valueOf(-5);
-		}
-
-		if (true)
-		{
-			zbc.close();
-			return Integer.valueOf(0);
 		}
 
 		// Check if Bootloader
@@ -66,17 +61,26 @@ public class OTAProgrammer
 			rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
 			if (rdo.getLength() != 1 || rdo.data[0] == 0x00)
 			{
+				zbc.close();
 				return Integer.valueOf(-7);
 			} else if (rdo.data[0] != 0x01)
 			{
+				zbc.close();
 				return Integer.valueOf(-8);
 			}
 		} else if (rdo.data[0] != 0x01)
 		{
+			zbc.close();
 			return Integer.valueOf(-6);
 		}
 
-		int pageSize = 128; // TODO
+		rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-GPS").getBytes(), 3);
+		if (rdo.getLength() != 2)
+		{
+			zbc.close();
+			return Integer.valueOf(-9);
+		}
+		int pageSize = ((rdo.data[0] << 8) & 0xFF) + (rdo.data[1] & 0xFF);
 		int minAddress = 0xFFFF;
 		int maxAddress = 0x0000;
 		try
