@@ -63,7 +63,8 @@ public class MainActivity extends Activity
 				} catch (NumberFormatException nfe)
 				{
 					Toast.makeText(getApplicationContext(), "Debe especificarse la dirección del Nodo ZigBee.",
-							Toast.LENGTH_SHORT).show();
+
+					Toast.LENGTH_SHORT).show();
 				}
 
 				if (zbAddr != null && hexFile != null)
@@ -94,7 +95,7 @@ public class MainActivity extends Activity
 		return true;
 	}
 
-	private class OTATask extends AsyncTask<Object, Integer, Integer>
+	private class OTATask extends AsyncTask<Object, Integer, RdoProgram>
 	{
 		@SuppressWarnings("unused")
 		public void pubProgress(Integer p)
@@ -103,7 +104,7 @@ public class MainActivity extends Activity
 		}
 
 		@Override
-		protected Integer doInBackground(Object... params)
+		protected RdoProgram doInBackground(Object... params)
 		{
 			Integer zbAddr = (Integer) params[0];
 			File hexFile = (File) params[1];
@@ -116,16 +117,23 @@ public class MainActivity extends Activity
 		@Override
 		protected void onProgressUpdate(Integer... progress)
 		{
-			((ProgressBar) findViewById(R.id.progressBar)).setProgress(progress[0].intValue());
+			if (progress[0] == -1)
+			{
+				Toast.makeText(getApplicationContext(), "Waiting 3 seconds for Node to go into bootloader.",
+						Toast.LENGTH_SHORT).show();
+			} else
+				((ProgressBar) findViewById(R.id.progressBar)).setProgress(progress[0].intValue());
 		}
 
 		@Override
-		protected void onPostExecute(Integer result)
+		protected void onPostExecute(RdoProgram result)
 		{
-			if (result.equals(0))
-				Toast.makeText(getApplicationContext(), "OTA programming finished ok.", Toast.LENGTH_SHORT).show();
-			else
-				Toast.makeText(getApplicationContext(), "OTA programming error:" + result, Toast.LENGTH_SHORT).show();
+			if (result != null)
+				if (result.equals(RdoProgram.OTA_OK))
+					Toast.makeText(getApplicationContext(), "OTA programming finished ok.", Toast.LENGTH_SHORT).show();
+				else
+					Toast.makeText(getApplicationContext(), "OTA programming error: " + result, Toast.LENGTH_SHORT)
+							.show();
 			((ProgressBar) findViewById(R.id.progressBar)).setProgress(0);
 		}
 	}

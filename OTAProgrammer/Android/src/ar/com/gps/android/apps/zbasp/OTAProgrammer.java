@@ -10,6 +10,7 @@ import java.util.TreeMap;
 import org.xjava.delegates.MethodDelegate;
 
 import android.content.Context;
+import android.util.Log;
 import android.widget.ProgressBar;
 
 public class OTAProgrammer
@@ -33,50 +34,53 @@ public class OTAProgrammer
 		this.progressBar = progressBar;
 	}
 
-	public Integer program()
+	public RdoProgram program()
 	{
 		ZBCoordinator zbc = new ZBCoordinator(this.context, this.actionUsbPermission);
+		RdoProgram rdo = null;
+		if (zbc.isCanUse())
+			try
+			{
+				rdo = program2(zbc);
+			} finally
+			{
+				zbc.close();
+			}
+		return rdo;
+	}
+
+	public RdoProgram program2(ZBCoordinator zbc)
+	{
 		if (!zbc.isHearbeatOk())
-		{
-			zbc.close();
-			return Integer.valueOf(-4);
-		}
-		
-		// TODO Verificar si el nodo está en BL, sino switchear a BL
+			return RdoProgram.NO_HEARTBEAT;
+
 		ZBResult rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
 		if (rdo.getStatus() == ZBResultStatus.TRANSFER_ERROR)
-		{
-			zbc.close();
-			return Integer.valueOf(-5);
-		}
-
-		if (true)
-		{
-			zbc.close();
-			return Integer.valueOf(0);
-		}
+			return RdoProgram.NO_IBL_RESPONSE;
 
 		// Check if Bootloader
 		if (rdo.data[0] == 0x00)
 		{
 			send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-SBL").getBytes(), 3);
-			// TODO Toast
-			// ("Waiting 3 seconds for Node to go into bootloader\n");
+			try
+			{
+				publishProgres.invoke(Integer.valueOf(-1));
+			} catch (Exception e)
+			{
+			}
 			bootloaderDelay();
 			rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-IBL").getBytes(), 3);
 			if (rdo.getLength() != 1 || rdo.data[0] == 0x00)
-			{
-				return Integer.valueOf(-7);
-			} else if (rdo.data[0] != 0x01)
-			{
-				return Integer.valueOf(-8);
-			}
+				return RdoProgram.CANT_SWITCH_BOOTLOADER;
+			else if (rdo.data[0] != 0x01)
+				return RdoProgram.SBL_INVALID_RESPONSE;
 		} else if (rdo.data[0] != 0x01)
-		{
-			return Integer.valueOf(-6);
-		}
+			return RdoProgram.IBL_INVALID_RESPONSE;
 
-		int pageSize = 128; // TODO
+		rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-GPS").getBytes(), 3);
+		if (rdo.getLength() != 2)
+			return RdoProgram.CANT_GET_PAGESIZE;
+		int pageSize = ((rdo.data[0] << 8) & 0xFF) + (rdo.data[1] & 0xFF);
 		int minAddress = 0xFFFF;
 		int maxAddress = 0x0000;
 		try
@@ -89,14 +93,14 @@ public class OTAProgrammer
 				if (line.charAt(0) != ':')
 				{
 					br.close();
-					return Integer.valueOf(1);
+					return RdoProgram.INVALID_HEX_FILE;
 				}
 
 				int regType = Integer.parseInt(line.substring(7, 9), 16);
 				if (regType == 0)
 				{
 					int data_cant = Integer.parseInt(line.substring(1, 3), 16);
-					int address = Integer.parseInt(line.substring(3, 4), 16);
+					int address = Integer.parseInt(line.substring(3, 7), 16);
 					if (minAddress > address)
 						minAddress = address;
 					for (int i = 0; i < data_cant; i++)
@@ -108,16 +112,16 @@ public class OTAProgrammer
 						if (idx > pageSize)
 						{
 							br.close();
-							return Integer.valueOf(2);
+							return RdoProgram.IDX_GT_PAGESIZE;
 						}
-						page.data[idx] = (char) Integer.parseInt(line.substring(9 + (i * 2), 11 + (i * 2)), 16);
+						page.data[idx] = (byte) (Integer.parseInt(line.substring(9 + (i * 2), 11 + (i * 2)), 16) & 0xFF);
 					}
 				} else if (regType == 1)
 					break;
 				else
 				{
 					br.close();
-					return Integer.valueOf(2);
+					return RdoProgram.UNKOWN_REGTYPE;
 				}
 			}
 			br.close();
@@ -142,6 +146,7 @@ public class OTAProgrammer
 							+ String.format("%04X", blPage.getBaseAddress()) + "-" + String.format("%02X", page_offset)
 							+ "-";
 					cmd.toCharArray();
+					Log.d("SND", cmd);
 					int this_chunk = blPage.getSizeChunk();
 					if (this_chunk + j > blPage.getPageSize())
 						this_chunk = blPage.getPageSize() % blPage.getSizeChunk();
@@ -151,6 +156,13 @@ public class OTAProgrammer
 					for (int i = 0; i < this_chunk; i++)
 						buffer[i + cmd.length()] = (byte) blPage.data[i + j];
 					page_offset += this_chunk;
+
+					String out = "";
+					for (int q = cmd.length(); q < buffer.length; q++)
+					{
+						out += String.format("%02X", buffer[q]) + "-";
+					}
+					Log.d("SND", out);
 
 					rdo = send(zbc, buffer, 0);
 
@@ -168,28 +180,21 @@ public class OTAProgrammer
 				publishProgres.invoke(Integer.valueOf(++pn));
 			} catch (Exception e)
 			{
-				// TODO Auto-generated catch block
-				e.printStackTrace();
 			}
 		}
 
 		// CRC Check
 		int crc16 = getCrc16();
-		rdo = send(zbc,
-				("SC-" + String.format("%02X", zbAddr) + "-CRC-" + String.format("%04X", minAddress) + "-" + String
-						.format("%04X", maxAddress)).getBytes(), 3);
-		boolean crc_ok = rdo.getLength() == 2 && crc16 == ((rdo.data[0] << 8) | rdo.data[1]);
+		String cmd = "SC-" + String.format("%02X", zbAddr) + "-CRC-" + String.format("%04X", minAddress) + "-"
+				+ String.format("%04X", maxAddress);
+		rdo = send(zbc, cmd.getBytes(), 3);
+		boolean crc_ok = (rdo.getLength() == 2) && crc16 == (((rdo.data[0] & 0xFF) << 8) | (rdo.data[1] & 0xFF));
 		if (crc_ok)
 		{
-			rdo = send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-QBL").getBytes(), 3);
+			send(zbc, ("SC-" + String.format("%02X", zbAddr) + "-QBL").getBytes(), 3);
+			return RdoProgram.OTA_OK;
 		} else
-		{
-			return Integer.valueOf(-3);
-		}
-
-		zbc.close();
-
-		return Integer.valueOf(0);
+			return RdoProgram.CRC_ERROR;
 	}
 
 	private void bootloaderDelay()
@@ -199,8 +204,6 @@ public class OTAProgrammer
 			Thread.sleep(3000);
 		} catch (InterruptedException e)
 		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
 	}
 
@@ -212,10 +215,11 @@ public class OTAProgrammer
 			BLPage blPage = entry.getValue();
 			for (int i = 0; i < blPage.getPageSize(); i++)
 			{
-				char data = blPage.data[i];
+				byte data = blPage.data[i];
 				data ^= crc & 0xFF;
 				data ^= data << 4;
-				crc = (short) ((((short) data << 8) | (crc >> 8)) ^ ((data >> 4) & 0xFF) ^ ((short) data << 3));
+
+				crc = (short) ((((data & 0xFF) << 8) | ((crc & 0xFFFF) >> 8)) ^ ((data & 0xFF) >> 4) ^ ((data & 0xFF) << 3));
 			}
 		}
 

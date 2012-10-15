@@ -20,6 +20,7 @@ public class ZBCoordinator
 {
 	private UsbDeviceConnection usbDeviceConnection = null;
 	private UsbEndpoint endpointInt = null;
+	private boolean canUse = false;
 
 	public ZBCoordinator(Context context, String actionUsbPermission)
 	{
@@ -43,12 +44,13 @@ public class ZBCoordinator
 		if (device != null && !manager.hasPermission(device))
 			manager.requestPermission(device, mPermissionIntent);
 
-		if (device != null)
+		if (device != null && manager.hasPermission(device))
 		{
 			UsbInterface intf = device.getInterface(0);
 			this.endpointInt = intf.getEndpoint(0);
 			this.usbDeviceConnection = manager.openDevice(device);
 			this.usbDeviceConnection.claimInterface(intf, false);
+			this.canUse = true;
 		}
 	}
 
@@ -112,6 +114,11 @@ public class ZBCoordinator
 	{
 		if (this.usbDeviceConnection != null)
 			this.usbDeviceConnection.close();
+	}
+
+	public boolean isCanUse()
+	{
+		return canUse;
 	}
 
 }

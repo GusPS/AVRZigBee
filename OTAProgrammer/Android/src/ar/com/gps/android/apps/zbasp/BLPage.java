@@ -3,7 +3,7 @@ package ar.com.gps.android.apps.zbasp;
 public class BLPage
 {
 
-	public char[] data;
+	public byte[] data;
 	private int baseAddress;
 	private int pageSize;
 	private int sizeChunk;
@@ -13,9 +13,9 @@ public class BLPage
 		this.baseAddress = baseAddress;
 		this.pageSize = pageSize;
 		this.sizeChunk = sizeChunk;
-		data = new char[this.pageSize];
+		data = new byte[this.pageSize];
 		for (int i = 0; i < data.length; i++)
-			data[i] = 0xFF;
+			data[i] = (byte) 0xFF;
 	}
 
 	public int getBaseAddress()
