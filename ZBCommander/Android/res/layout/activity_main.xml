@@ -1,0 +1,14 @@
+<TableLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" >
+
+    <TableRow>
+        <TextView android:text="Node ID:" />
+        <EditText android:id="@+id/nodeID" />
+    </TableRow>
+    
+    <EditText android:id="@+id/cmdTxt" android:singleLine="true" />
+    
+    <TextView android:id="@+id/cmdHistory" />
+</TableLayout>
