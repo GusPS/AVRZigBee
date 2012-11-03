@@ -231,6 +231,8 @@ bl_page *get_page(unsigned short address, unsigned short page_size)
 			return p;
 		}
 	}
+
+	return NULL;
 }
 
 unsigned short get_crc16(void)

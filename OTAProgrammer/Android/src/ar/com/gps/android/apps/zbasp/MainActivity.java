@@ -81,6 +81,7 @@ public class MainActivity extends Activity
 			case _ReqChooseFile:
 				if (resultCode == RESULT_OK)
 				{
+					@SuppressWarnings("unchecked")
 					List<LocalFile> files = (List<LocalFile>) data.getSerializableExtra(FileChooserActivity._Results);
 					((EditText) findViewById(R.id.hexfile)).setText(files.get(0).getAbsolutePath());
 				}
