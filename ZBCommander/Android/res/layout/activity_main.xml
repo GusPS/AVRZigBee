@@ -4,11 +4,11 @@
     android:layout_height="match_parent" >
 
     <TableRow>
-        <TextView android:text="Node ID:" />
-        <EditText android:id="@+id/nodeID" />
+        <TextView android:text="@string/node_id_" />
+        <EditText android:id="@+id/nodeID" android:inputType="text"/>
     </TableRow>
     
-    <EditText android:id="@+id/cmdTxt" android:singleLine="true" />
+    <EditText android:id="@+id/cmdTxt" android:singleLine="true" android:inputType="text"/>
     
     <TextView android:id="@+id/cmdHistory" />
 </TableLayout>
